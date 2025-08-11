@@ -17,52 +17,56 @@ export async function handleToolCall(
   server: Server
 ): Promise<CallToolResult> {
   logger.debug('Tool call received', { tool: name, arguments: args });
-  const page = await ensureBrowser();
+
+  // Handle connect_active_tab separately - don't call ensureBrowser()
+  if (name === "puppeteer_connect_active_tab") {
+    try {
+      const wsEndpoint = await getDebuggerWebSocketUrl(args.debugPort);
+      const connectedPage = await connectToExistingBrowser(
+        wsEndpoint, 
+        args.targetUrl,
+        (logEntry) => {
+          state.consoleLogs.push(logEntry);
+          notifyConsoleUpdate(server);
+        }
+      );
+      const url = await connectedPage.url();
+      const title = await connectedPage.title();
+      return {
+        content: [{
+          type: "text",
+          text: `Successfully connected to browser\nActive webpage: ${title} (${url})`,
+        }],
+        isError: false,
+      };
+    } catch (error) {
+      const errorMessage = (error as Error).message;
+      const isConnectionError = errorMessage.includes('connect to Chrome debugging port') || 
+                              errorMessage.includes('Target closed');
+      
+      return {
+        content: [{
+          type: "text",
+          text: `Failed to connect to browser: ${errorMessage}\n\n` +
+                (isConnectionError ? 
+                  "To connect to Chrome:\n" +
+                  "1. Close Chrome completely\n" +
+                  "2. Reopen Chrome with remote debugging enabled:\n" +
+                  "   Windows: chrome.exe --remote-debugging-port=9222\n" +
+                  "   Mac: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222\n" +
+                  "3. Navigate to your desired webpage\n" +
+                  "4. Try the operation again" : 
+                  "Please check if Chrome is running and try again.")
+        }],
+        isError: true,
+      };
+    }
+  }
+
+  // For all other tools, ensure we have a page (either connected or launched)
+  const page = getCurrentPage() || await ensureBrowser();
 
   switch (name) {
-    case "puppeteer_connect_active_tab":
-      try {
-        const wsEndpoint = await getDebuggerWebSocketUrl(args.debugPort);
-        const connectedPage = await connectToExistingBrowser(
-          wsEndpoint, 
-          args.targetUrl,
-          (logEntry) => {
-            state.consoleLogs.push(logEntry);
-            notifyConsoleUpdate(server);
-          }
-        );
-        const url = await connectedPage.url();
-        const title = await connectedPage.title();
-        return {
-          content: [{
-            type: "text",
-            text: `Successfully connected to browser\nActive webpage: ${title} (${url})`,
-          }],
-          isError: false,
-        };
-      } catch (error) {
-        const errorMessage = (error as Error).message;
-        const isConnectionError = errorMessage.includes('connect to Chrome debugging port') || 
-                                errorMessage.includes('Target closed');
-        
-        return {
-          content: [{
-            type: "text",
-            text: `Failed to connect to browser: ${errorMessage}\n\n` +
-                  (isConnectionError ? 
-                    "To connect to Chrome:\n" +
-                    "1. Close Chrome completely\n" +
-                    "2. Reopen Chrome with remote debugging enabled:\n" +
-                    "   Windows: chrome.exe --remote-debugging-port=9222\n" +
-                    "   Mac: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222\n" +
-                    "3. Navigate to your desired webpage\n" +
-                    "4. Try the operation again" : 
-                    "Please check if Chrome is running and try again.")
-          }],
-          isError: true,
-        };
-      }
-
     case "puppeteer_navigate":
       try {
         logger.info('Navigating to URL', { url: args.url });
