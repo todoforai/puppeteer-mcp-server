@@ -32,6 +32,26 @@ export const TOOLS: Tool[] = [
     },
   },
   {
+    name: "puppeteer_interactable_elements",
+    description: "Find all interactable elements on the page with their selectors and descriptions",
+    inputSchema: {
+      type: "object",
+      properties: {
+        includeHidden: { 
+          type: "boolean", 
+          description: "Include hidden elements (default: false)",
+          default: false
+        },
+        maxElements: {
+          type: "number",
+          description: "Maximum number of elements to return (default: 200)",
+          default: 200
+        }
+      },
+      required: [],
+    },
+  },
+  {
     name: "puppeteer_screenshot",
     description: "Take a screenshot of the current page or a specific element",
     inputSchema: {

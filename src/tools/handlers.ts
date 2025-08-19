@@ -276,6 +276,147 @@ export async function handleToolCall(
         };
       }
 
+    case "puppeteer_interactable_elements":
+      try {
+        const includeHidden = args.includeHidden ?? false;
+        const maxElements = args.maxElements ?? 200;
+
+        const clickableElements = await page.evaluate((includeHidden, maxElements) => {
+          const elements = [];
+          const allElements = document.querySelectorAll('*');
+
+          for (let i = 0; i < allElements.length && elements.length < maxElements; i++) {
+            const el = allElements[i];
+
+            // Skip hidden elements unless requested
+            if (!includeHidden) {
+              const style = window.getComputedStyle(el);
+              if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+                continue;
+              }
+            }
+
+            // Balanced interactable element detection
+            const isInteractable =
+              // Standard interactive elements
+              ['A', 'BUTTON', 'INPUT', 'SELECT', 'TEXTAREA', 'DETAILS', 'SUMMARY', 'LABEL'].includes(el.tagName) ||
+              // Editable content
+              el.hasAttribute('contenteditable') ||
+              // Direct interaction event handlers
+              el.hasAttribute('onclick') || el.hasAttribute('onmousedown') || el.hasAttribute('ondblclick') ||
+              el.hasAttribute('onchange') || el.hasAttribute('oninput') ||
+              // ARIA roles for interactive elements
+              (el.hasAttribute('role') && ['button', 'link', 'menuitem', 'tab', 'checkbox', 'radio', 'slider', 'spinbutton', 'textbox'].includes(el.getAttribute('role'))) ||
+              // Focusable elements
+              el.hasAttribute('tabindex') ||
+              // Visual indicators
+              window.getComputedStyle(el).cursor === 'pointer';
+
+            if (!isInteractable) continue;
+
+            // Enhanced selector generation with priority
+            let selector = '';
+            const selectors = [];
+
+            // Priority 1: ID
+            if (el.id) {
+              selectors.push(`#${el.id}`);
+            }
+
+            // Priority 2: Name attribute
+            if (el.name) {
+              selectors.push(`[name="${el.name}"]`);
+            }
+
+            // Priority 3: Data attributes
+            for (const attr of el.attributes) {
+              if (attr.name.startsWith('data-') && attr.value) {
+                selectors.push(`[${attr.name}="${attr.value}"]`);
+                break; // Just take the first data attribute
+              }
+            }
+
+            // Priority 4: Class (first class only)
+            if (el.className && typeof el.className === 'string') {
+              const firstClass = el.className.trim().split(/\s+/)[0];
+              if (firstClass) {
+                selectors.push(`.${firstClass}`);
+              }
+            }
+
+            // Priority 5: Type-specific selectors
+            if (el.type) {
+              selectors.push(`${el.tagName.toLowerCase()}[type="${el.type}"]`);
+            }
+
+            // Priority 6: Text-based (for buttons/links with short text)
+            const text = el.textContent?.trim();
+            if (text && text.length > 0 && text.length <= 30) {
+              if (el.tagName === 'BUTTON') {
+                selectors.push(`button:contains("${text.replace(/"/g, '\\"')}")`);
+              } else if (el.tagName === 'A') {
+                selectors.push(`a:contains("${text.replace(/"/g, '\\"')}")`);
+              }
+            }
+
+            // Priority 7: Nth-child fallback
+            const siblings = Array.from(el.parentNode?.children || []);
+            const sameTagSiblings = siblings.filter(child => child.tagName === el.tagName);
+            const index = sameTagSiblings.indexOf(el) + 1;
+            selectors.push(`${el.tagName.toLowerCase()}:nth-of-type(${index})`);
+
+            // Use the first available selector
+            selector = selectors[0] || el.tagName.toLowerCase();
+
+            // Enhanced description
+            const description = 
+              text?.slice(0, 50) ||
+              el.getAttribute('aria-label') ||
+              el.getAttribute('title') ||
+              el.getAttribute('placeholder') ||
+              el.getAttribute('alt') ||
+              el.href ||
+              el.value ||
+              `${el.tagName}${el.type ? `[${el.type}]` : ''}${el.getAttribute('role') ? `[${el.getAttribute('role')}]` : ''}`;
+
+            elements.push({
+              selector,
+              description: description || 'No description',
+              tag: el.tagName,
+              type: el.type || null,
+              alternatives: selectors.slice(1, 3) // Show up to 2 alternative selectors
+            });
+          }
+
+          return elements;
+        }, includeHidden, maxElements);
+
+        const summary = `Found ${clickableElements.length} interactable elements:\n\n` +
+          clickableElements.map((el, index) => {
+            let line = `${index + 1}. ${el.selector} - ${el.description}`;
+            if (el.alternatives && el.alternatives.length > 0) {
+              line += `\n   Alt: ${el.alternatives.join(', ')}`;
+            }
+            return line;
+          }).join('\n\n');
+
+        return {
+          content: [{
+            type: "text",
+            text: summary,
+          }],
+          isError: false,
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Failed to find interactable elements: ${(error as Error).message}`,
+          }],
+          isError: true,
+        };
+      }
+
     default:
       return {
         content: [{
