@@ -23,7 +23,7 @@ export async function handleToolCall(
     try {
       const wsEndpoint = await getDebuggerWebSocketUrl(args.debugPort);
       const connectedPage = await connectToExistingBrowser(
-        wsEndpoint, 
+        wsEndpoint,
         args.targetUrl,
         (logEntry) => {
           state.consoleLogs.push(logEntry);
@@ -41,21 +41,21 @@ export async function handleToolCall(
       };
     } catch (error) {
       const errorMessage = (error as Error).message;
-      const isConnectionError = errorMessage.includes('connect to Chrome debugging port') || 
+      const isConnectionError = errorMessage.includes('connect to Chrome debugging port') ||
                               errorMessage.includes('Target closed');
-      
+
       return {
         content: [{
           type: "text",
           text: `Failed to connect to browser: ${errorMessage}\n\n` +
-                (isConnectionError ? 
+                (isConnectionError ?
                   "To connect to Chrome:\n" +
                   "1. Close Chrome completely\n" +
                   "2. Reopen Chrome with remote debugging enabled:\n" +
                   "   Windows: chrome.exe --remote-debugging-port=9222\n" +
                   "   Mac: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222\n" +
                   "3. Navigate to your desired webpage\n" +
-                  "4. Try the operation again" : 
+                  "4. Try the operation again" :
                   "Please check if Chrome is running and try again.")
         }],
         isError: true,
@@ -74,7 +74,7 @@ export async function handleToolCall(
           waitUntil: 'networkidle0',
           timeout: 30000
         });
-        
+
         if (!response) {
           throw new Error('Navigation failed - no response received');
         }
@@ -232,12 +232,12 @@ export async function handleToolCall(
         const consoleListener = (message: any) => {
           logs.push(`${message.type()}: ${message.text()}`);
         };
-        
+
         page.on('console', consoleListener);
-        
+
         // Execute script with proper serialization
         logger.debug('Executing script in browser', { scriptLength: args.script.length });
-        
+
         // Wrap the script in a function that returns a serializable result
         const result = await page.evaluate(`(async () => {
           try {
@@ -248,10 +248,10 @@ export async function handleToolCall(
             return { error: e.message };
           }
         })()`);
-        
+
         // Remove the listener to avoid memory leaks
         page.off('console', consoleListener);
-        
+
         logger.debug('Script execution result', {
           resultType: typeof result,
           hasResult: result !== undefined,
