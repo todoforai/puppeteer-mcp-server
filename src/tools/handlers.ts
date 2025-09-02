@@ -306,7 +306,7 @@ export async function handleToolCall(
               el.hasAttribute('onclick') || el.hasAttribute('onmousedown') || el.hasAttribute('ondblclick') ||
               el.hasAttribute('onchange') || el.hasAttribute('oninput') ||
               // ARIA roles for interactive elements
-              (el.hasAttribute('role') && ['button', 'link', 'menuitem', 'tab', 'checkbox', 'radio', 'slider', 'spinbutton', 'textbox'].includes(el.getAttribute('role'))) ||
+              (el.hasAttribute('role') && ['button', 'link', 'menuitem', 'tab', 'checkbox', 'radio', 'slider', 'spinbutton', 'textbox'].includes(el.getAttribute('role')!)) ||
               // Focusable elements
               el.hasAttribute('tabindex') ||
               // Visual indicators
@@ -324,12 +324,14 @@ export async function handleToolCall(
             }
 
             // Priority 2: Name attribute
-            if (el.name) {
-              selectors.push(`[name="${el.name}"]`);
+            const nameAttr = el.getAttribute('name');
+            if (nameAttr) {
+              selectors.push(`[name="${nameAttr}"]`);
             }
 
             // Priority 3: Data attributes
-            for (const attr of el.attributes) {
+            for (let j = 0; j < el.attributes.length; j++) {
+              const attr = el.attributes[j];
               if (attr.name.startsWith('data-') && attr.value) {
                 selectors.push(`[${attr.name}="${attr.value}"]`);
                 break; // Just take the first data attribute
@@ -345,8 +347,9 @@ export async function handleToolCall(
             }
 
             // Priority 5: Type-specific selectors
-            if (el.type) {
-              selectors.push(`${el.tagName.toLowerCase()}[type="${el.type}"]`);
+            const typeAttr = el.getAttribute('type');
+            if (typeAttr) {
+              selectors.push(`${el.tagName.toLowerCase()}[type="${typeAttr}"]`);
             }
 
             // Priority 6: Text-based (for buttons/links with short text)
@@ -369,21 +372,23 @@ export async function handleToolCall(
             selector = selectors[0] || el.tagName.toLowerCase();
 
             // Enhanced description
+            const hrefAttr = el.getAttribute('href');
+            const valueAttr = el.getAttribute('value');
             const description = 
               text?.slice(0, 50) ||
               el.getAttribute('aria-label') ||
               el.getAttribute('title') ||
               el.getAttribute('placeholder') ||
               el.getAttribute('alt') ||
-              el.href ||
-              el.value ||
-              `${el.tagName}${el.type ? `[${el.type}]` : ''}${el.getAttribute('role') ? `[${el.getAttribute('role')}]` : ''}`;
+              hrefAttr ||
+              valueAttr ||
+              `${el.tagName}${typeAttr ? `[${typeAttr}]` : ''}${el.getAttribute('role') ? `[${el.getAttribute('role')}]` : ''}`;
 
             elements.push({
               selector,
               description: description || 'No description',
               tag: el.tagName,
-              type: el.type || null,
+              type: typeAttr || null,
               alternatives: selectors.slice(1, 3) // Show up to 2 alternative selectors
             });
           }
