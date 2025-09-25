@@ -33,7 +33,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "puppeteer_interactable_elements",
-    description: "Find all interactable elements on the page with their selectors and descriptions",
+    description: "Get all interactable elements on the page with their selectors and descriptions to use page elements for interaction",
     inputSchema: {
       type: "object",
       properties: {
@@ -59,8 +59,7 @@ export const TOOLS: Tool[] = [
       properties: {
         name: { type: "string", description: "Name for the screenshot" },
         selector: { type: "string", description: "CSS selector for element to screenshot" },
-        width: { type: "number", description: "Width in pixels (default: 800)" },
-        height: { type: "number", description: "Height in pixels (default: 600)" },
+        // Remove width and height options since we're not changing viewport
       },
       required: ["name"],
     },

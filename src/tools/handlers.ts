@@ -54,6 +54,7 @@ export async function handleToolCall(
                   "2. Reopen Chrome with remote debugging enabled:\n" +
                   "   Windows: chrome.exe --remote-debugging-port=9222\n" +
                   "   Mac: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222\n" +
+                  "   Linux: google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug --no-first-run --no-default-browser-check\n" +
                   "3. Navigate to your desired webpage\n" +
                   "4. Try the operation again" :
                   "Please check if Chrome is running and try again.")
@@ -105,9 +106,10 @@ export async function handleToolCall(
       }
 
     case "puppeteer_screenshot": {
-      const width = args.width ?? 800;
-      const height = args.height ?? 600;
-      await page.setViewport({ width, height });
+      // Remove viewport manipulation entirely - use browser's current size
+      // const width = args.width ?? 800;
+      // const height = args.height ?? 600;
+      // await page.setViewport({ width, height });
 
       const screenshot = await (args.selector ?
         (await page.$(args.selector))?.screenshot({ encoding: "base64" }) :
@@ -123,6 +125,10 @@ export async function handleToolCall(
         };
       }
 
+      // Get actual viewport size for reporting
+      const viewport = page.viewport();
+      const viewportInfo = viewport ? `${viewport.width}x${viewport.height}` : "browser natural size";
+
       state.screenshots.set(args.name, screenshot);
       notifyScreenshotUpdate(server);
 
@@ -130,7 +136,7 @@ export async function handleToolCall(
         content: [
           {
             type: "text",
-            text: `Screenshot '${args.name}' taken at ${width}x${height}`,
+            text: `Screenshot '${args.name}' taken at ${viewportInfo}`,
           } as TextContent,
           {
             type: "image",
@@ -356,16 +362,16 @@ export async function handleToolCall(
             const text = el.textContent?.trim();
             if (text && text.length > 0 && text.length <= 30) {
               if (el.tagName === 'BUTTON') {
-                selectors.push(`button:contains("${text.replace(/"/g, '\\"')}")`);
+                selectors.push(`button[text*="${text.replace(/"/g, '\\"')}"]`); // or keep :contains for Puppeteer
               } else if (el.tagName === 'A') {
-                selectors.push(`a:contains("${text.replace(/"/g, '\\"')}")`);
+                selectors.push(`a[text*="${text.replace(/"/g, '\\"')}"]`);
               }
             }
 
             // Priority 7: Nth-child fallback
             const siblings = Array.from(el.parentNode?.children || []);
-            const sameTagSiblings = siblings.filter(child => child.tagName === el.tagName);
-            const index = sameTagSiblings.indexOf(el) + 1;
+            const sameTagSibling = siblings.filter(child => child.tagName === el.tagName);
+            const index = sameTagSibling.indexOf(el) + 1;
             selectors.push(`${el.tagName.toLowerCase()}:nth-of-type(${index})`);
 
             // Use the first available selector
@@ -397,13 +403,10 @@ export async function handleToolCall(
         }, includeHidden, maxElements);
 
         const summary = `Found ${clickableElements.length} interactable elements:\n\n` +
-          clickableElements.map((el, index) => {
-            let line = `${index + 1}. ${el.selector} - ${el.description}`;
-            if (el.alternatives && el.alternatives.length > 0) {
-              line += `\n   Alt: ${el.alternatives.join(', ')}`;
-            }
-            return line;
-          }).join('\n\n');
+          clickableElements.map((el) => {
+            const alts = el.alternatives?.length > 0 ? ` | ${el.alternatives.slice(0,2).join(' | ')}` : '';
+            return `${el.selector} - "${el.description}"${alts}`;
+          }).join('\n');
 
         return {
           content: [{
