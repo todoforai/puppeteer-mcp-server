@@ -1,32 +1,65 @@
 import { LaunchOptions } from 'puppeteer';
 
-// Common browser arguments for both NPX and Docker environments
-const commonArgs = [
-  "--disable-web-security",  // Bypass CORS
-  "--disable-features=IsolateOrigins,site-per-process", // Disable site isolation
-  "--disable-site-isolation-trials",
-  "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36" // Modern Chrome UA
-];
-
-// NPX configuration for local development
-export const npxConfig: LaunchOptions = { 
-  headless: false,
-  args: commonArgs
-};
-
-// Docker configuration for containerized environment
-export const dockerConfig: LaunchOptions = { 
-  headless: true, 
-  args: [
-    "--no-sandbox",
-    "--single-process",
-    "--no-zygote",
-    ...commonArgs
-  ]
-};
-
 // Default navigation timeout in milliseconds
 export const DEFAULT_NAVIGATION_TIMEOUT = 30000;
 
 // Default debugging port for Chrome
 export const DEFAULT_DEBUG_PORT = 9222;
+
+// Configuration for running in Docker or headless environments
+export const dockerConfig: LaunchOptions = {
+  headless: true,
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--disable-accelerated-2d-canvas',
+    '--no-first-run',
+    '--no-zygote',
+    '--disable-gpu',
+    '--disable-extensions',
+    '--disable-default-apps',
+    '--disable-translate',
+    '--disable-sync',
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-features=TranslateUI',
+    '--disable-ipc-flooding-protection',
+    '--disable-web-security',
+    '--disable-features=VizDisplayCompositor',
+    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  ],
+  defaultViewport: { width: 1280, height: 720 }
+};
+
+// Configuration for running with display (headed mode)
+export const npxConfig: LaunchOptions = {
+  headless: false,
+  args: [
+    '--no-sandbox',
+    '--disable-setuid-sandbox',
+    '--disable-dev-shm-usage',
+    '--no-first-run',
+    '--disable-default-apps',
+    // Keep translate disabled for automation (remove if you want translation features)
+    '--disable-translate',
+    '--disable-features=TranslateUI',
+    '--disable-sync',
+    // Keep these for reliable automation performance
+    '--disable-background-timer-throttling',
+    '--disable-backgrounding-occluded-windows',
+    '--disable-renderer-backgrounding',
+    '--disable-ipc-flooding-protection',
+    // Window size control - opens at reasonable size regardless of monitor
+    '--window-size=1280,720',
+    '--window-position=100,100',
+    '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  ],
+  defaultViewport: null,
+  devtools: false,
+  env: {
+    ...process.env,
+    DISPLAY: process.env.DISPLAY || ':1'
+  }
+};
