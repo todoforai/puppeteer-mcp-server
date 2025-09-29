@@ -362,7 +362,7 @@ export async function handleToolCall(
             const text = el.textContent?.trim();
             if (text && text.length > 0 && text.length <= 30) {
               if (el.tagName === 'BUTTON') {
-                selectors.push(`button[text*="${text.replace(/"/g, '\\"')}"]`); // or keep :contains for Puppeteer
+                selectors.push(`button[text*="${text.replace(/"/g, '\\"')}"]`);
               } else if (el.tagName === 'A') {
                 selectors.push(`a[text*="${text.replace(/"/g, '\\"')}"]`);
               }
@@ -377,9 +377,14 @@ export async function handleToolCall(
             // Use the first available selector
             selector = selectors[0] || el.tagName.toLowerCase();
 
-            // Enhanced description
+            // Collect useful attributes
             const hrefAttr = el.getAttribute('href');
             const valueAttr = el.getAttribute('value');
+            const srcAttr = el.getAttribute('src');
+            const actionAttr = el.getAttribute('action');
+            const targetAttr = el.getAttribute('target');
+            
+            // Enhanced description
             const description = 
               text?.slice(0, 50) ||
               el.getAttribute('aria-label') ||
@@ -390,11 +395,22 @@ export async function handleToolCall(
               valueAttr ||
               `${el.tagName}${typeAttr ? `[${typeAttr}]` : ''}${el.getAttribute('role') ? `[${el.getAttribute('role')}]` : ''}`;
 
+            // Build attributes object
+            const attributes: any = {};
+            if (hrefAttr) attributes.href = hrefAttr;
+            if (valueAttr) attributes.value = valueAttr;
+            if (srcAttr) attributes.src = srcAttr;
+            if (actionAttr) attributes.action = actionAttr;
+            if (targetAttr) attributes.target = targetAttr;
+            if (typeAttr) attributes.type = typeAttr;
+            if (nameAttr) attributes.name = nameAttr;
+
             elements.push({
               selector,
               description: description || 'No description',
               tag: el.tagName,
               type: typeAttr || null,
+              attributes,
               alternatives: selectors.slice(1, 3) // Show up to 2 alternative selectors
             });
           }
@@ -404,8 +420,26 @@ export async function handleToolCall(
 
         const summary = `Found ${clickableElements.length} interactable elements:\n\n` +
           clickableElements.map((el) => {
-            const alts = el.alternatives?.length > 0 ? ` | ${el.alternatives.slice(0,2).join(' | ')}` : '';
-            return `${el.selector} - "${el.description}"${alts}`;
+            // Build HTML-like representation
+            const tag = el.tag.toLowerCase();
+            const attrs = Object.entries(el.attributes)
+              .map(([k, v]) => `${k}="${v}"`)
+              .join(' ');
+            const attrString = attrs ? ` ${attrs}` : '';
+            
+            // Self-closing tags
+            const selfClosing = ['input', 'img', 'br', 'hr', 'meta', 'link'];
+            if (selfClosing.includes(tag)) {
+              return `<${tag}${attrString} />`;
+            }
+            
+            // Regular tags with content
+            const content = el.description !== 'No description' && 
+                           !el.attributes.href && 
+                           !el.attributes.value && 
+                           !el.attributes.src ? el.description : '';
+            
+            return `<${tag}${attrString}>${content}</${tag}>`;
           }).join('\n');
 
         return {
