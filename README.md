@@ -43,13 +43,13 @@ This project is an experimental implementation inspired by [@modelcontextprotoco
 ### Option 1: Install from npm
 
 ```bash
-npm install -g puppeteer-mcp-server
+npm install -g @todoforai/puppeteer-mcp-server
 ```
 
 You can also run it directly without installation using npx:
 
 ```bash
-npx puppeteer-mcp-server
+npx @todoforai/puppeteer-mcp-server
 ```
 
 ### Option 2: Install from source
@@ -87,7 +87,7 @@ Add the following to your Claude Desktop configuration file (located at `%APPDAT
 {
   "mcpServers": {
     "puppeteer": {
-      "command": "puppeteer-mcp-server",
+      "command": "@todoforai/puppeteer-mcp-server",
       "args": [],
       "env": {}
     }
@@ -102,7 +102,7 @@ Add the following to your Claude Desktop configuration file (located at `%APPDAT
   "mcpServers": {
     "puppeteer": {
       "command": "npx",
-      "args": ["-y", "puppeteer-mcp-server"],
+      "args": ["-y", "@todoforai/puppeteer-mcp-server"],
       "env": {}
     }
   }
@@ -135,7 +135,7 @@ Add the following to your Claude VSCode extension MCP settings file (located at 
 {
   "mcpServers": {
     "puppeteer": {
-      "command": "puppeteer-mcp-server",
+      "command": "@todoforai/puppeteer-mcp-server",
       "args": [],
       "env": {}
     }
@@ -150,7 +150,7 @@ Add the following to your Claude VSCode extension MCP settings file (located at 
   "mcpServers": {
     "puppeteer": {
       "command": "npx",
-      "args": ["-y", "puppeteer-mcp-server"],
+      "args": ["-y", "@todoforai/puppeteer-mcp-server"],
       "env": {}
     }
   }
@@ -284,7 +284,7 @@ The server implements comprehensive logging using Winston:
 - DEBUG: Detailed debugging information
 - INFO: General operational information
 - WARN: Warning messages
-- ERROR: Error events and exceptions
+- ERROR: Error events
 
 ### Logged Information
 - Server startup/shutdown events
