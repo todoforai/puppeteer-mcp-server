@@ -9,6 +9,7 @@ import {
 } from "../browser/connection.js";
 import { notifyConsoleUpdate, notifyScreenshotUpdate } from "../resources/handlers.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { DEFAULT_NAVIGATION_TIMEOUT } from "../config/browser.js";
 
 export async function handleToolCall(
   name: string, 
@@ -73,7 +74,7 @@ export async function handleToolCall(
         logger.info('Navigating to URL', { url: args.url });
         const response = await page.goto(args.url, {
           waitUntil: 'networkidle0',
-          timeout: 30000
+          timeout: DEFAULT_NAVIGATION_TIMEOUT
         });
 
         if (!response) {
