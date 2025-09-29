@@ -51,9 +51,7 @@ export const npxConfig: LaunchOptions = {
     '--disable-backgrounding-occluded-windows',
     '--disable-renderer-backgrounding',
     '--disable-ipc-flooding-protection',
-    // Window size control - opens at reasonable size regardless of monitor
-    '--window-size=1280,720',
-    '--window-position=100,100',
+    // Use Chrome's default window size - it's usually reasonable for the screen
     '--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
   ],
   defaultViewport: null,
