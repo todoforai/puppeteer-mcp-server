@@ -33,7 +33,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "puppeteer_interactable_elements",
-    description: "Get all interactable elements on the page with their selectors and descriptions to use page elements for interaction",
+    description: "Primary navigation tool - Lists all interactive elements (buttons, links, inputs, dropdowns) with their selectors and descriptions. Use this to understand available actions, then take screenshots for visual context if needed.",
     inputSchema: {
       type: "object",
       properties: {
