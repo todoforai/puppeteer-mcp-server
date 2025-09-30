@@ -1,6 +1,6 @@
 {
     "name": "@todoforai/puppeteer-mcp-server",
-    "version": "0.7.6",
+    "version": "0.7.7",
     "description": "Experimental MCP server for browser automation using Puppeteer (inspired by @modelcontextprotocol/server-puppeteer)",
     "license": "MIT",
     "author": "todoforai",
@@ -12,7 +12,7 @@
     },
     "type": "module",
     "bin": {
-        "puppeteer-mcp-server": "./dist/index.js"
+        "puppeteer-mcp-server": "dist/index.js"
     },
     "files": [
         "dist"
