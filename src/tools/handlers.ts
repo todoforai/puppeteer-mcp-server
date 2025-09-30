@@ -104,7 +104,7 @@ export async function handleToolCall(
       try {
         logger.info('Navigating to URL', { url: args.url });
         const response = await page.goto(args.url, {
-          waitUntil: 'networkidle0',
+          waitUntil: 'load',
           timeout: DEFAULT_NAVIGATION_TIMEOUT
         });
 
@@ -320,7 +320,7 @@ export async function handleToolCall(
         const maxElements = args.maxElements ?? 200;
 
         const clickableElements = await page.evaluate((includeHidden, maxElements) => {
-          const elements = [];
+          const elements: any[] = [];
           const allElements = document.querySelectorAll('*');
 
           for (let i = 0; i < allElements.length && elements.length < maxElements; i++) {
@@ -334,6 +334,9 @@ export async function handleToolCall(
               }
             }
 
+            // Skip noise elements early
+            if (['path', 'svg', 'circle', 'rect', 'polygon', 'g', 'IMG'].includes(el.tagName)) continue;
+
             // Balanced interactable element detection
             const isInteractable =
               // Standard interactive elements
@@ -345,12 +348,26 @@ export async function handleToolCall(
               el.hasAttribute('onchange') || el.hasAttribute('oninput') ||
               // ARIA roles for interactive elements
               (el.hasAttribute('role') && ['button', 'link', 'menuitem', 'tab', 'checkbox', 'radio', 'slider', 'spinbutton', 'textbox'].includes(el.getAttribute('role')!)) ||
-              // Focusable elements
-              el.hasAttribute('tabindex') ||
-              // Visual indicators
-              window.getComputedStyle(el).cursor === 'pointer';
+              // Focusable elements (but skip if it's just a container)
+              (el.hasAttribute('tabindex') && !['DIV', 'SPAN', 'LI'].includes(el.tagName));
 
             if (!isInteractable) continue;
+
+            // Skip generic containers without meaningful content
+            const text = el.textContent?.trim();
+            
+            // Skip if description is just the tag name (BUTTON, DIV, P, etc.)
+            if (text && text.toUpperCase() === el.tagName) continue;
+            
+            // Skip child elements if they duplicate parent's text (avoid li+span, a+div combos)
+            const parent = el.parentElement;
+            if (parent && parent.textContent?.trim() === text && 
+                elements.some(e => e.description === text)) continue;
+            
+            if (['DIV', 'SPAN', 'LI'].includes(el.tagName)) {
+              const meaningfulContent = text && text.length > 2 && text.toUpperCase() !== el.tagName;
+              if (!el.hasAttribute('href') && !meaningfulContent) continue;
+            }
 
             // Enhanced selector generation with priority
             let selector = '';
@@ -391,7 +408,6 @@ export async function handleToolCall(
             }
 
             // Priority 6: Text-based (for buttons/links with short text)
-            const text = el.textContent?.trim();
             if (text && text.length > 0 && text.length <= 30) {
               if (el.tagName === 'BUTTON') {
                 selectors.push(`button[text*="${text.replace(/"/g, '\\"')}"]`);
@@ -451,27 +467,21 @@ export async function handleToolCall(
         }, includeHidden, maxElements);
 
         const summary = `Found ${clickableElements.length} interactable elements:\n\n` +
-          clickableElements.map((el) => {
-            // Build HTML-like representation
+          clickableElements.map((el, idx) => {
             const tag = el.tag.toLowerCase();
             const attrs = Object.entries(el.attributes)
               .map(([k, v]) => `${k}="${v}"`)
               .join(' ');
-            const attrString = attrs ? ` ${attrs}` : '';
+            const selectorAttr = `data-selector="${el.selector}"`;
+            const attrString = [selectorAttr, attrs].filter(Boolean).join(' ');
             
-            // Self-closing tags
             const selfClosing = ['input', 'img', 'br', 'hr', 'meta', 'link'];
-            if (selfClosing.includes(tag)) {
-              return `<${tag}${attrString} />`;
-            }
+            const content = el.description && el.description !== 'No description' ? el.description : '';
+            const htmlTag = selfClosing.includes(tag) 
+              ? `<${tag} ${attrString} />`
+              : `<${tag} ${attrString}>${content}</${tag}>`;
             
-            // Regular tags with content
-            const content = el.description !== 'No description' && 
-                           !el.attributes.href && 
-                           !el.attributes.value && 
-                           !el.attributes.src ? el.description : '';
-            
-            return `<${tag}${attrString}>${content}</${tag}>`;
+            return `[${idx}] ${htmlTag}`;
           }).join('\n');
 
         return {

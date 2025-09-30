@@ -3,7 +3,7 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js";
 export const TOOLS: Tool[] = [
   {
     name: "puppeteer_navigate",
-    description: "Navigate to a URL",
+    description: "Navigate to a URL and return the status. Wait for the results before continue!",
     inputSchema: {
       type: "object",
       properties: {
@@ -55,7 +55,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "puppeteer_interactable_elements",
-    description: "Primary navigation tool - Lists all interactive elements (buttons, links, inputs, dropdowns) with their selectors and descriptions. Use this to understand available actions, then take screenshots for visual context if needed.",
+    description: "Primary navigation tool - Lists all interactive elements (buttons, links, inputs, dropdowns) with their selectors and descriptions. This will help you understand everything on the page, then you can process it with other tools.",
     inputSchema: {
       type: "object",
       properties: {
@@ -75,7 +75,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "puppeteer_screenshot",
-    description: "Take a screenshot of the current page or a specific element",
+    description: "Take a screenshot of the current page or a specific element. Wait for the results before continue!",
     inputSchema: {
       type: "object",
       properties: {
@@ -87,7 +87,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "puppeteer_click",
-    description: "Click an element on the page",
+    description: "Click an element on the page. Wait for the results before continue!",
     inputSchema: {
       type: "object",
       properties: {
@@ -98,7 +98,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "puppeteer_fill",
-    description: "Fill out an input field",
+    description: "Fill out an input field. ",
     inputSchema: {
       type: "object",
       properties: {
