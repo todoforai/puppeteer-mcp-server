@@ -5,23 +5,31 @@ import { dockerConfig, npxConfig, DEFAULT_NAVIGATION_TIMEOUT } from "../config/b
 // Global browser instance
 let browser: Browser | undefined;
 let currentPage: Page | undefined;
+let disconnectHandlerAttached = false;
 
 export async function ensureBrowser(): Promise<Page> {
-  if (!browser || !browser.connected) {
+  // Check if browser exists AND is actually connected
+  if (!browser || !browser.connected || !currentPage || currentPage.isClosed()) {
     logger.info('Launching new browser instance');
     browser = await puppeteer.launch(process.env.DOCKER_CONTAINER ? dockerConfig : npxConfig);
     
-    // Get the first page or create a new one
+    // Attach disconnect handler only once
+    if (!disconnectHandlerAttached) {
+      browser.on('disconnected', () => {
+        logger.warn('Browser disconnected');
+        browser = undefined;
+        currentPage = undefined;
+        disconnectHandlerAttached = false;
+      });
+      disconnectHandlerAttached = true;
+    }
+    
     const pages = await browser.pages();
     currentPage = pages.length > 0 ? pages[0] : await browser.newPage();
 
     // Set default navigation timeout
     await currentPage.setDefaultNavigationTimeout(DEFAULT_NAVIGATION_TIMEOUT);
-    
-    // Enable JavaScript
     await currentPage.setJavaScriptEnabled(true);
-
-    // Set user agent to avoid bot detection
     await currentPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
     logger.info('Browser launched successfully');
