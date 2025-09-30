@@ -2,7 +2,7 @@ import { CallToolResult, TextContent, ImageContent } from "@modelcontextprotocol
 import { logger } from "../config/logger.js";
 import { BrowserState } from "../types/global.js";
 import { ensureBrowser, getAllTabs, selectTab, createNewTab, closeTab } from "../browser/connection.js";
-import { notifyConsoleUpdate, notifyScreenshotUpdate } from "../resources/handlers.js";
+import {  notifyScreenshotUpdate } from "../resources/handlers.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { DEFAULT_NAVIGATION_TIMEOUT } from "../config/browser.js";
 
@@ -137,43 +137,48 @@ export async function handleToolCall(
         };
       }
 
-    case "puppeteer_screenshot": {
-      const screenshot = await (args.selector ?
-        (await page.$(args.selector))?.screenshot({ encoding: "base64" }) :
-        page.screenshot({ encoding: "base64", fullPage: false }));
+    case "puppeteer_screenshot":
+      try {
+        const screenshot = await (args.selector ?
+          (await page.$(args.selector))?.screenshot({ encoding: "base64" }) :
+          page.screenshot({ encoding: "base64", fullPage: false }));
 
-      if (!screenshot) {
+        if (!screenshot) {
+          throw new Error(args.selector ? `Element not found: ${args.selector}` : "Screenshot failed");
+        }
+
+        // Get actual viewport size for reporting
+        const viewport = page.viewport();
+        const viewportInfo = viewport ? `${viewport.width}x${viewport.height}` : "browser natural size";
+
+        state.screenshots.set(args.name, screenshot);
+        notifyScreenshotUpdate(server);
+
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Screenshot '${args.name}' taken at ${viewportInfo}`,
+            } as TextContent,
+            {
+              type: "image",
+              data: screenshot,
+              mimeType: "image/png",
+            } as ImageContent,
+          ],
+          isError: false,
+        };
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.error('Tool failed', { tool: name, error: errorMessage });
         return {
           content: [{
             type: "text",
-            text: args.selector ? `Element not found: ${args.selector}` : "Screenshot failed",
+            text: `Failed to take screenshot: ${errorMessage}`,
           }],
           isError: true,
         };
       }
-
-      // Get actual viewport size for reporting
-      const viewport = page.viewport();
-      const viewportInfo = viewport ? `${viewport.width}x${viewport.height}` : "browser natural size";
-
-      state.screenshots.set(args.name, screenshot);
-      notifyScreenshotUpdate(server);
-
-      return {
-        content: [
-          {
-            type: "text",
-            text: `Screenshot '${args.name}' taken at ${viewportInfo}`,
-          } as TextContent,
-          {
-            type: "image",
-            data: screenshot,
-            mimeType: "image/png",
-          } as ImageContent,
-        ],
-        isError: false,
-      };
-    }
 
     case "puppeteer_click":
       try {
@@ -487,6 +492,7 @@ export async function handleToolCall(
       }
 
     default:
+      logger.error('Tool failed', { tool: name, error: 'Unknown tool' });
       return {
         content: [{
           type: "text",

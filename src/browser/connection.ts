@@ -7,7 +7,7 @@ let browser: Browser | undefined;
 let currentPage: Page | undefined;
 
 export async function ensureBrowser(): Promise<Page> {
-  if (!browser || !browser.isConnected()) {
+  if (!browser || !browser.connected) {
     logger.info('Launching new browser instance');
     browser = await puppeteer.launch(process.env.DOCKER_CONTAINER ? dockerConfig : npxConfig);
     
@@ -20,9 +20,6 @@ export async function ensureBrowser(): Promise<Page> {
     
     // Enable JavaScript
     await currentPage.setJavaScriptEnabled(true);
-
-    // Set a reasonable viewport
-    await currentPage.setViewport({ width: 1280, height: 720 });
 
     // Set user agent to avoid bot detection
     await currentPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
