@@ -1,12 +1,7 @@
 import { CallToolResult, TextContent, ImageContent } from "@modelcontextprotocol/sdk/types.js";
 import { logger } from "../config/logger.js";
 import { BrowserState } from "../types/global.js";
-import { 
-  ensureBrowser, 
-  getDebuggerWebSocketUrl, 
-  connectToExistingBrowser,
-  getCurrentPage 
-} from "../browser/connection.js";
+import { ensureBrowser, getAllTabs, selectTab, createNewTab, closeTab } from "../browser/connection.js";
 import { notifyConsoleUpdate, notifyScreenshotUpdate } from "../resources/handlers.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { DEFAULT_NAVIGATION_TIMEOUT } from "../config/browser.js";
@@ -19,56 +14,92 @@ export async function handleToolCall(
 ): Promise<CallToolResult> {
   logger.debug('Tool call received', { tool: name, arguments: args });
 
-  // Handle connect_active_tab separately - don't call ensureBrowser()
-  if (name === "puppeteer_connect_active_tab") {
-    try {
-      const wsEndpoint = await getDebuggerWebSocketUrl(args.debugPort);
-      const connectedPage = await connectToExistingBrowser(
-        wsEndpoint,
-        args.targetUrl,
-        (logEntry) => {
-          state.consoleLogs.push(logEntry);
-          notifyConsoleUpdate(server);
-        }
-      );
-      const url = await connectedPage.url();
-      const title = await connectedPage.title();
-      return {
-        content: [{
-          type: "text",
-          text: `Successfully connected to browser\nActive webpage: ${title} (${url})`,
-        }],
-        isError: false,
-      };
-    } catch (error) {
-      const errorMessage = (error as Error).message;
-      const isConnectionError = errorMessage.includes('connect to Chrome debugging port') ||
-                              errorMessage.includes('Target closed');
-
-      return {
-        content: [{
-          type: "text",
-          text: `Failed to connect to browser: ${errorMessage}\n\n` +
-                (isConnectionError ?
-                  "To connect to Chrome:\n" +
-                  "1. Close Chrome completely\n" +
-                  "2. Reopen Chrome with remote debugging enabled:\n" +
-                  "   Windows: chrome.exe --remote-debugging-port=9222\n" +
-                  "   Mac: /Applications/Google\\ Chrome.app/Contents/MacOS/Google\\ Chrome --remote-debugging-port=9222\n" +
-                  "   Linux: google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug --no-first-run --no-default-browser-check\n" +
-                  "3. Navigate to your desired webpage\n" +
-                  "4. Try the operation again" :
-                  "Please check if Chrome is running and try again.")
-        }],
-        isError: true,
-      };
-    }
-  }
-
-  // For all other tools, ensure we have a page (either connected or launched)
-  const page = getCurrentPage() || await ensureBrowser();
+  // Ensure we have a browser page for all operations
+  const page = await ensureBrowser();
 
   switch (name) {
+    case "puppeteer_list_tabs":
+      try {
+        const tabs = await getAllTabs();
+        const tabList = tabs.map((tab, index) => 
+          `${index}: ${tab.title || 'Untitled'} - ${tab.url}`
+        ).join('\n');
+
+        return {
+          content: [{
+            type: "text",
+            text: `Open tabs (${tabs.length}):\n${tabList}`,
+          }],
+          isError: false,
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Failed to list tabs: ${(error as Error).message}`,
+          }],
+          isError: true,
+        };
+      }
+
+    case "puppeteer_select_tab":
+      try {
+        if (args.tabIndex === -1) {
+          // Create new tab
+          await createNewTab(args.url);
+          const tabs = await getAllTabs();
+          const newTabIndex = tabs.length - 1;
+          return {
+            content: [{
+              type: "text",
+              text: `Created new tab (index: ${newTabIndex})${args.url ? ` and navigated to ${args.url}` : ''}`,
+            }],
+            isError: false,
+          };
+        } else {
+          // Switch to existing tab
+          const selectedPage = await selectTab(args.tabIndex);
+          const url = await selectedPage.url();
+          const title = await selectedPage.title();
+          return {
+            content: [{
+              type: "text",
+              text: `Switched to tab ${args.tabIndex}: ${title} - ${url}`,
+            }],
+            isError: false,
+          };
+        }
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Failed to select tab: ${(error as Error).message}`,
+          }],
+          isError: true,
+        };
+      }
+
+    case "puppeteer_close_tab":
+      try {
+        await closeTab(args.tabIndex);
+        const tabs = await getAllTabs();
+        return {
+          content: [{
+            type: "text",
+            text: `Closed tab ${args.tabIndex}. Remaining tabs: ${tabs.length}`,
+          }],
+          isError: false,
+        };
+      } catch (error) {
+        return {
+          content: [{
+            type: "text",
+            text: `Failed to close tab: ${(error as Error).message}`,
+          }],
+          isError: true,
+        };
+      }
+
     case "puppeteer_navigate":
       try {
         logger.info('Navigating to URL', { url: args.url });
@@ -107,11 +138,6 @@ export async function handleToolCall(
       }
 
     case "puppeteer_screenshot": {
-      // Remove viewport manipulation entirely - use browser's current size
-      // const width = args.width ?? 800;
-      // const height = args.height ?? 600;
-      // await page.setViewport({ width, height });
-
       const screenshot = await (args.selector ?
         (await page.$(args.selector))?.screenshot({ encoding: "base64" }) :
         page.screenshot({ encoding: "base64", fullPage: false }));

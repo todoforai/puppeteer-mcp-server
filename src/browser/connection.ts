@@ -1,123 +1,141 @@
 import puppeteer, { Browser, Page } from "puppeteer";
 import { logger } from "../config/logger.js";
 import { dockerConfig, npxConfig, DEFAULT_NAVIGATION_TIMEOUT } from "../config/browser.js";
-import { ActiveTab } from "../types/global.js";
 
 // Global browser instance
 let browser: Browser | undefined;
-let page: Page | undefined;
+let currentPage: Page | undefined;
 
 export async function ensureBrowser(): Promise<Page> {
-  if (!browser) {
-    logger.info('Launching browser with config:', process.env.DOCKER_CONTAINER ? 'docker' : 'npx');
+  if (!browser || !browser.isConnected()) {
+    logger.info('Launching new browser instance');
     browser = await puppeteer.launch(process.env.DOCKER_CONTAINER ? dockerConfig : npxConfig);
+    
+    // Get the first page or create a new one
     const pages = await browser.pages();
-    page = pages[0];
+    currentPage = pages.length > 0 ? pages[0] : await browser.newPage();
 
     // Set default navigation timeout
-    await page.setDefaultNavigationTimeout(DEFAULT_NAVIGATION_TIMEOUT);
+    await currentPage.setDefaultNavigationTimeout(DEFAULT_NAVIGATION_TIMEOUT);
     
     // Enable JavaScript
-    await page.setJavaScriptEnabled(true);
+    await currentPage.setJavaScriptEnabled(true);
+
+    // Set a reasonable viewport
+    await currentPage.setViewport({ width: 1280, height: 720 });
+
+    // Set user agent to avoid bot detection
+    await currentPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
     
     logger.info('Browser launched successfully');
   }
-  return page!;
+  
+  return currentPage!;
 }
 
-export async function getDebuggerWebSocketUrl(port: number = 9222): Promise<string> {
-  try {
-    const response = await fetch(`http://localhost:${port}/json/version`);
-    if (!response.ok) {
-      throw new Error(`Failed to fetch debugger info: ${response.statusText}`);
-    }
-    const data = await response.json();
-    if (!data.webSocketDebuggerUrl) {
-      throw new Error("No WebSocket debugger URL found. Is Chrome running with --remote-debugging-port?");
-    }
-    return data.webSocketDebuggerUrl;
-  } catch (error) {
-    throw new Error(`Failed to connect to Chrome debugging port ${port}: ${(error as Error).message}`);
+export async function getAllTabs(): Promise<{ page: Page; url: string; title: string; index: number }[]> {
+  if (!browser) {
+    throw new Error('Browser not initialized');
   }
+
+  const pages = await browser.pages();
+  const tabs = [];
+
+  for (let i = 0; i < pages.length; i++) {
+    const page = pages[i];
+    try {
+      const url = await page.url();
+      const title = await page.title();
+      tabs.push({ page, url, title, index: i });
+    } catch (error) {
+      // Skip pages that might be closed or inaccessible
+      logger.warn(`Failed to get info for tab ${i}:`, error);
+    }
+  }
+
+  return tabs;
 }
 
-export async function connectToExistingBrowser(
-  wsEndpoint: string, 
-  targetUrl?: string,
-  onConsoleMessage?: (logEntry: string) => void
-): Promise<Page> {
-  logger.info('Connecting to existing browser', { wsEndpoint, targetUrl });
-  try {
-    // If we have an existing Puppeteer-launched browser, close it
-    if (browser && !browser.isConnected()) {
-      logger.debug('Closing existing browser connection');
-      await browser.close();
-      browser = undefined;
-      page = undefined;
-    }
-
-    // Connect to the browser instance with null viewport to maintain browser's viewport
-    logger.debug('Establishing connection to browser');
-    browser = await puppeteer.connect({ 
-      browserWSEndpoint: wsEndpoint,
-      defaultViewport: null
-    });
-    logger.info('Successfully connected to browser');
-
-    // Get all pages and find non-extension pages
-    const pages = await browser.pages();
-    const activeTabs: ActiveTab[] = [];
-    
-    for (const p of pages) {
-      const url = await p.url();
-      if (!url.startsWith('chrome-extension://')) {
-        const title = await p.title();
-        logger.info('Found active webpage:', { url, title });
-        activeTabs.push({ page: p, url, title });
-      }
-    }
-
-    if (activeTabs.length === 0) {
-      throw new Error("No active non-extension pages found in the browser");
-    }
-
-    // Select appropriate page
-    if (targetUrl) {
-      // Find the page with matching URL
-      const targetTab = activeTabs.find(tab => tab.url === targetUrl);
-      page = targetTab ? targetTab.page : activeTabs[0].page;
-    } else {
-      // Use the first active non-extension page
-      page = activeTabs[0].page;
-    }
-
-    // Configure page settings
-    await page.setExtraHTTPHeaders({
-      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-    });
-
-    // Set up console message handling
-    if (onConsoleMessage) {
-      page.on("console", (msg) => {
-        const logEntry = `[${msg.type()}] ${msg.text()}`;
-        onConsoleMessage(logEntry);
-      });
-    }
-
-    return page;
-  } catch (error) {
-    throw error;
+export async function selectTab(tabIndex: number): Promise<Page> {
+  if (!browser) {
+    throw new Error('Browser not initialized');
   }
+
+  const pages = await browser.pages();
+  
+  if (tabIndex < 0 || tabIndex >= pages.length) {
+    throw new Error(`Tab index ${tabIndex} is out of range. Available tabs: 0-${pages.length - 1}`);
+  }
+
+  currentPage = pages[tabIndex];
+  logger.info(`Switched to tab ${tabIndex}`);
+  return currentPage;
+}
+
+export async function createNewTab(url?: string): Promise<Page> {
+  if (!browser) {
+    throw new Error('Browser not initialized');
+  }
+
+  const newPage = await browser.newPage();
+  
+  // Configure the new page
+  await newPage.setDefaultNavigationTimeout(DEFAULT_NAVIGATION_TIMEOUT);
+  await newPage.setJavaScriptEnabled(true);
+  await newPage.setViewport({ width: 1280, height: 720 });
+  await newPage.setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36');
+
+  if (url) {
+    await newPage.goto(url, { waitUntil: 'networkidle0', timeout: DEFAULT_NAVIGATION_TIMEOUT });
+  }
+
+  currentPage = newPage;
+  logger.info(`Created new tab${url ? ` and navigated to ${url}` : ''}`);
+  return newPage;
+}
+
+export async function closeTab(tabIndex: number): Promise<void> {
+  if (!browser) {
+    throw new Error('Browser not initialized');
+  }
+
+  const pages = await browser.pages();
+  
+  if (pages.length <= 1) {
+    throw new Error('Cannot close the last remaining tab');
+  }
+
+  if (tabIndex < 0 || tabIndex >= pages.length) {
+    throw new Error(`Tab index ${tabIndex} is out of range. Available tabs: 0-${pages.length - 1}`);
+  }
+
+  const pageToClose = pages[tabIndex];
+  
+  // If we're closing the current page, switch to another tab
+  if (pageToClose === currentPage) {
+    // Switch to the next tab, or the previous one if we're closing the last tab
+    const newIndex = tabIndex < pages.length - 1 ? tabIndex : tabIndex - 1;
+    currentPage = pages[newIndex === tabIndex ? newIndex - 1 : newIndex];
+  }
+
+  await pageToClose.close();
+  logger.info(`Closed tab ${tabIndex}`);
 }
 
 export async function closeBrowser(): Promise<void> {
   if (browser) {
+    logger.info('Closing browser');
     await browser.close();
     browser = undefined;
-    page = undefined;
+    currentPage = undefined;
+    logger.info('Browser closed');
   }
 }
 
 export function getCurrentPage(): Page | undefined {
-  return page;
+  return currentPage;
+}
+
+export function getBrowser(): Browser | undefined {
+  return browser;
 }

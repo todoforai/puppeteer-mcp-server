@@ -2,25 +2,6 @@ import { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 export const TOOLS: Tool[] = [
   {
-    name: "puppeteer_connect_active_tab",
-    description: "Connect to an existing Chrome instance with remote debugging enabled",
-    inputSchema: {
-      type: "object",
-      properties: {
-        targetUrl: { 
-          type: "string", 
-          description: "Optional URL of the target tab to connect to. If not provided, connects to the first available tab." 
-        },
-        debugPort: {
-          type: "number",
-          description: "Optional Chrome debugging port (default: 9222)",
-          default: 9222
-        }
-      },
-      required: [],
-    },
-  },
-  {
     name: "puppeteer_navigate",
     description: "Navigate to a URL",
     inputSchema: {
@@ -29,6 +10,47 @@ export const TOOLS: Tool[] = [
         url: { type: "string" },
       },
       required: ["url"],
+    },
+  },
+  {
+    name: "puppeteer_list_tabs",
+    description: "List all open tabs in the browser with their URLs, titles, and tab IDs",
+    inputSchema: {
+      type: "object",
+      properties: {},
+      required: [],
+    },
+  },
+  {
+    name: "puppeteer_select_tab",
+    description: "Switch to a specific tab by its index or create a new tab",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tabIndex: { 
+          type: "number", 
+          description: "Index of the tab to switch to (0-based). Use -1 to create a new tab." 
+        },
+        url: {
+          type: "string",
+          description: "Optional URL to navigate to when creating a new tab (only used when tabIndex is -1)"
+        }
+      },
+      required: ["tabIndex"],
+    },
+  },
+  {
+    name: "puppeteer_close_tab",
+    description: "Close a specific tab by its index. Cannot close the last remaining tab.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        tabIndex: { 
+          type: "number", 
+          description: "Index of the tab to close (0-based)" 
+        }
+      },
+      required: ["tabIndex"],
     },
   },
   {
@@ -59,7 +81,6 @@ export const TOOLS: Tool[] = [
       properties: {
         name: { type: "string", description: "Name for the screenshot" },
         selector: { type: "string", description: "CSS selector for element to screenshot" },
-        // Remove width and height options since we're not changing viewport
       },
       required: ["name"],
     },
